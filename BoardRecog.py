@@ -45,8 +45,21 @@ def getMergedCentroidClusters(centroids):
             break
     return corners
 
+#use instead of modular dilate for images with non-linear edges
+def softDilate(img, pixels=1):
+    height, width = img.shape[:2]
+    img1 = np.zeros([height,width,1],dtype=img.dtype)
+
+    for y in range(pixels,height-pixels):
+        for x in range(pixels, width-pixels):
+            for i in range(-pixels, pixels+1):
+                for j in range(-pixels, pixels+1):
+                    img1[y,x]|=img[y+i, x+j]
+                    img1[y,x]//=0.9
+    return img1
+
 def getFilteredCentroids(img, centroids, samplingRate, threshold, imgTest):
-    cv2.dilate(img, np.ones((100, 100)), iterations=10)
+    img=cv2.dilate(img, np.ones((1, 1)), iterations=10)
 
     height, width = img.shape[:2]
     distance = 0.1*max(img.shape[:2])
@@ -107,7 +120,8 @@ def getFilteredCentroids(img, centroids, samplingRate, threshold, imgTest):
                 lineValue -= CLEANEDGEBIAS*cv2.mean(img[max(0,y-CLEANEDGEBLOCKSIZE):min(height,y+CLEANEDGEBLOCKSIZE), max(0,x-CLEANEDGEBLOCKSIZE):min(width,x+CLEANEDGEBLOCKSIZE)])[0]
 
             lines.append((edgeIntercept, edgeIntercept1, lineValue, rho))
-            
+
+# Anglesort potentially unneccessary
 
 ##    angles = [[1, lines[0][3]]]
 ##
@@ -130,7 +144,7 @@ def getFilteredCentroids(img, centroids, samplingRate, threshold, imgTest):
 ##    angle=max(angles, key=lambda x: x[0])[1]
 ##    angles = [x for x in angles if abs(angle-x[1])%(2*np.pi)>0.35*np.pi]
 ##    angle1=max(angles, key=lambda x: x[0])[1]
-##            
+##             
 ##    lines = [line for line in lines if abs(angle-line[3])%(2*np.pi)<0.15*np.pi or abs(angle1-line[3])%(2*np.pi)<0.15*np.pi]
 
     maxLineValue=max(lines, key=lambda x: x[2])[2]*threshold
@@ -138,7 +152,6 @@ def getFilteredCentroids(img, centroids, samplingRate, threshold, imgTest):
         if line[2] >= maxLineValue:
             cv2.line(imgTest,line[0],line[1],(0,0,255),2)
     cycleImg(imgTest)
-    cycleImg(img)
         
 
 for filename in os.listdir(PATH):  
