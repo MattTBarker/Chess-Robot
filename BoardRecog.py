@@ -18,7 +18,7 @@ CLEANEDGEBIAS=1
 
 def cycleImg(img):
     cv2.imshow('chessboard',img)
-    if cv2.waitKey(0):
+    if cv2.waitKey(0) & 0xFF:
         cv2.destroyAllWindows()
 
 def getMergedCentroidClusters(centroids):
