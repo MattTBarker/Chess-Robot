@@ -57,7 +57,7 @@ def softDilate(img, pixels=1):
     return img1
 
 def getFilteredCentroids(img, centroids, samplingRate, threshold, imgTest):
-    img = cv2.dilate(img,np.ones((2,2),np.uint8),iterations = 1)
+    img = cv2.dilate(img,np.ones((3,3),np.uint8),iterations = 1)
 
     height, width = img.shape[:2]
     distance = 0.1*max(img.shape[:2])
@@ -184,4 +184,4 @@ for filename in os.listdir(PATH):
     imgCanny = cv2.Canny(img,50,150,apertureSize = 3)
 
     corners = getMergedCentroidClusters(centroidArray, MINCORNERDISTANCE)
-    getFilteredCentroids(imgCanny, corners, 100, 0.6, img)
+    getFilteredCentroids(imgCanny, corners, 50, 0.5, img)
