@@ -11,7 +11,7 @@ HARRISBLOCKSIZE=3
 HARRISAPERTURE=3
 HARRISCORNERRESPONSE=0.02
 HARRISFILTER=0.08
-MINCORNERDISTANCE=0.05
+MINCORNERDISTANCE=10
 CLEANEDGEBLOCKSIZE=10
 CLEANEDGEBIAS=1
 
@@ -21,16 +21,15 @@ def cycleImg(img):
     if cv2.waitKey(0) & 0xFF:
         cv2.destroyAllWindows()
 
-def getMergedCentroidClusters(centroids):
+#Averages nearby centroids into a single point
+def getMergedCentroidClusters(centroids, distance=5):
     corners = list({(int(l[0]), int(l[1])) for l in centroids})
-
-    distance = np.ceil(MINCORNERDISTANCE*min(img.shape[:2]))
     while True:
         flag=True
         
         size=len(corners)
         i=0
-        while i < size:
+        while i < size: 
             corner1 = corners[i]
             for corner in corners:
                 if corner==corner1:
@@ -43,9 +42,8 @@ def getMergedCentroidClusters(centroids):
             i+=1
         if(flag):
             break
-    return corners
+    return corners      
 
-#use instead of modular dilate for images with non-linear edges
 def softDilate(img, pixels=1):
     height, width = img.shape[:2]
     img1 = np.zeros([height,width,1],dtype=img.dtype)
@@ -59,7 +57,7 @@ def softDilate(img, pixels=1):
     return img1
 
 def getFilteredCentroids(img, centroids, samplingRate, threshold, imgTest):
-    img=cv2.dilate(img, np.ones((1, 1)), iterations=10)
+    img = cv2.dilate(img,np.ones((2,2),np.uint8),iterations = 1)
 
     height, width = img.shape[:2]
     distance = 0.1*max(img.shape[:2])
@@ -68,6 +66,7 @@ def getFilteredCentroids(img, centroids, samplingRate, threshold, imgTest):
 
     height-=1
     width-=1
+    dist=0.05*min(height, width)
 
     lines=[]
 
@@ -84,7 +83,7 @@ def getFilteredCentroids(img, centroids, samplingRate, threshold, imgTest):
                 rho=0.5*np.pi
                 edgeIntercept = (corner[0], 0)
                 edgeIntercept1 = (corner[0], height)
-            else: 
+            else:                                                     
                 m=(corner[1]-corner1[1])/(corner[0]-corner1[0])
                 c=corner[1]-m*corner[0]
                 rho=np.arctan2(corner[1]-corner1[1], corner[0]-corner1[0])        
@@ -116,12 +115,26 @@ def getFilteredCentroids(img, centroids, samplingRate, threshold, imgTest):
             for i in range(samplingRate):
                 x=int(edgeIntercept[0]+i*xStep)
                 y=int(edgeIntercept[1]+i*yStep)
-                lineValue += img[y, x]
-                lineValue -= CLEANEDGEBIAS*cv2.mean(img[max(0,y-CLEANEDGEBLOCKSIZE):min(height,y+CLEANEDGEBLOCKSIZE), max(0,x-CLEANEDGEBLOCKSIZE):min(width,x+CLEANEDGEBLOCKSIZE)])[0]
+                lineValue += max(img[y, x]-CLEANEDGEBIAS*cv2.mean(img[max(0,y-CLEANEDGEBLOCKSIZE):min(height,y+CLEANEDGEBLOCKSIZE), max(0,x-CLEANEDGEBLOCKSIZE):min(width,x+CLEANEDGEBLOCKSIZE)])[0], 0)
 
-            lines.append((edgeIntercept, edgeIntercept1, lineValue, rho))
+            flag=True
+            i=0
+            while i<len(lines):
+                line=lines[i]
+                if edgeIntercept[0]>=line[0][0]-dist and edgeIntercept[0]<=line[0][0]+dist and edgeIntercept[1]>=line[0][1]-dist and edgeIntercept[1]<=line[0][1]+dist:
+                    if edgeIntercept1[0]>=line[1][0]-dist and edgeIntercept1[0]<=line[1][0]+dist and edgeIntercept1[1]>=line[1][1]-dist and edgeIntercept1[1]<=line[1][1]+dist:
+                        flag=False
+                        if lineValue > line[2]:
+                            lines[i]=(edgeIntercept, edgeIntercept1, lineValue)
+                        else:
+                            break
+                i+=1
+            if flag:
+                lines.append((edgeIntercept, edgeIntercept1, lineValue))
+                
+    lines = set(lines)
 
-# Anglesort potentially unneccessary
+#Angle filter probably unnecessary            
 
 ##    angles = [[1, lines[0][3]]]
 ##
@@ -170,5 +183,5 @@ for filename in os.listdir(PATH):
 
     imgCanny = cv2.Canny(img,50,150,apertureSize = 3)
 
-    corners = getMergedCentroidClusters(centroidArray)
-    getFilteredCentroids(imgCanny, corners, 100, 0.4, img)
+    corners = getMergedCentroidClusters(centroidArray, MINCORNERDISTANCE)
+    getFilteredCentroids(imgCanny, corners, 100, 0.6, img)
