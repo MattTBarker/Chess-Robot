@@ -15,6 +15,7 @@ MINCORNERDISTANCE=10
 CLEANEDGEBLOCKSIZE=10
 CLEANEDGEBIAS=1
 
+#(((x1*y2-y1*x2)*(x3-x4)-(x1-x2)*(x3*y4-y3*x4) )/((x1-x2)*(y3-y4)-(y1-y2)*(x3-x4)), ((x1*y2-y1*x2)*(y3-y4)-(y1-y2)*(x3*y4-y3*x4))/((x1-x2)*(y3-y4)-(y1-y2)*(x3-x4)))
 
 def cycleImg(img):
     cv2.imshow('chessboard',img)
@@ -101,7 +102,7 @@ def getFilteredCentroids(img, centroids, samplingRate, threshold, imgTest):
                     edgeIntercept1 = (width, c)
                 elif -c/m >= 0 and -c/m <= width and edgeIntercept != (-c/m, 0):
                     edgeIntercept1 = (-c/m, 0)
-                else: #must intersect at Y=height
+                else: #must intercept at Y=height
                     edgeIntercept1 = ((height-c)/m, height)
 
             xStep = (edgeIntercept1[0]-edgeIntercept[0])/samplingRate
@@ -134,7 +135,7 @@ def getFilteredCentroids(img, centroids, samplingRate, threshold, imgTest):
                 
     lines = set(lines)
 
-#Angle filter probably unnecessary            
+#Angle filter probably unnecessary
 
 ##    angles = [[1, lines[0][3]]]
 ##
@@ -160,14 +161,62 @@ def getFilteredCentroids(img, centroids, samplingRate, threshold, imgTest):
 ##             
 ##    lines = [line for line in lines if abs(angle-line[3])%(2*np.pi)<0.15*np.pi or abs(angle1-line[3])%(2*np.pi)<0.15*np.pi]
 
-    maxLineValue=max(lines, key=lambda x: x[2])[2]*threshold
+    maxLineValue=max(lines, key=lambda l: l[2])[2]*threshold
+    lines = [[line[0], line[1], np.arctan2(line[0][1]-line[1][1], line[0][0]-line[1][0])%np.pi, set(), 0] for line in lines if line[2] >= maxLineValue]
+
+    imgTest1=imgTest.copy()
     for line in lines:
-        if line[2] >= maxLineValue:
-            cv2.line(imgTest,line[0],line[1],(0,0,255),2)
+        cv2.line(imgTest1,line[0],line[1],(0,0,255),2)
+    cycleImg(imgTest1)
+
+
+
+
+#Fast Angle Filter
+    
+    for line in lines:
+        for line1 in lines:
+            if abs(line[2]-line1[2])%np.pi<0.01*np.pi:
+                line[4]+=1
+                continue
+                
+            intersectX=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][0]-line[1][0])-(line1[0][0]-line1[1][0])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
+            intersectY=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
+            intersection = (int(intersectX), int(intersectY))
+            if intersection[0]>0 and intersection[0]<width and intersection[1]>0 and intersection[1]<height:
+                continue
+            line[3].add(intersection)
+
+
+    for line in lines:
+        bestScore=0
+        for point in line[3]:
+            accuracy = np.sqrt(abs(height//2-point[1])**2 + abs(width//2-point[0])**2)*0.1
+            i=0
+            for point1 in line[3]:
+                if abs(point[0]-point1[0])<accuracy and abs(point[1]-point1[1])<accuracy:
+                    i+=1
+            if i>bestScore:
+                bestScore=i
+        line[4]+=bestScore
+
+    maxAngleVariance=max(lines, key=lambda l: l[4])[4]*0.5
+    lines = [(line[0], line[1], line[2]) for line in lines if line[4] >= maxAngleVariance]
+
+#Janky af, works well on mostly complete boards, poorly on boards with many missing edges
+
+
+
+
+    for line in lines:
+        cv2.line(imgTest,line[0],line[1],(0,0,255),2)
     cycleImg(imgTest)
+
+def regenerateMissingEdges(lines):
+    
         
 
-for filename in os.listdir(PATH):  
+for filename in os.listdir(PATH):
     img = cv2.imread(PATH + filename)
     cycleImg(img)
 
