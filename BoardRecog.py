@@ -55,13 +55,24 @@ def softDilate(img, pixels=1):
                     img1[y,x]//=0.9
     return img1
 
-def getFilteredCentroids(img, centroids, samplingRate, threshold, imgTest):
-    img = cv2.dilate(img,np.ones((3,3),np.uint8),iterations = 1)
+#Takes an image and returns the chess board edges in that image
+#Args - (image as numpy array, pixel interval between checking pixel value along suspected edges, threshold floating point for what qualifies as an edge from 0-1)
+#Return - [(x,y),(x1,y1),rho]
+def getFilteredEdges(img,samplingRate, threshold):
+    imgTest=img.copy()
+
+    cornerMap = cv2.cornerHarris(np.float32(cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)),HARRISBLOCKSIZE,HARRISAPERTURE,HARRISCORNERRESPONSE)
+    cornerMap = cv2.threshold(cornerMap,0.04*cornerMap.max(),255,cv2.THRESH_BINARY)[1]
+    cornerMap = np.uint8(cornerMap)
+
+    centroids = getMergedCentroidClusters(cv2.connectedComponentsWithStats(cornerMap)[3], MINCORNERDISTANCE)
+#    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.001)
 
     height, width = img.shape[:2]
     distance = 0.1*max(img.shape[:2])
 
-    centroids = [corner for corner in centroids if corner[0]!=0 and corner[0]!=width and corner[1]!=0 and corner[1]!=height]
+    imgCanny = cv2.Canny(img,50,150,apertureSize = 3)
+    img = cv2.dilate(imgCanny,np.ones((3,3),np.uint8),iterations = 1)
 
     height-=1
     width-=1
@@ -162,14 +173,6 @@ def getFilteredCentroids(img, centroids, samplingRate, threshold, imgTest):
     maxLineValue=max(lines, key=lambda l: l[2])[2]*threshold
     lines = [[line[0], line[1], np.arctan2(line[0][1]-line[1][1], line[0][0]-line[1][0])%np.pi, set(), 0] for line in lines if line[2] >= maxLineValue]
 
-    imgTest1=imgTest.copy()
-    for line in lines:
-        cv2.line(imgTest1,line[0],line[1],(0,0,255),2)
-    cycleImg(imgTest1)
-
-
-
-
 #Fast Angle Filter
     
     for line in lines:
@@ -204,27 +207,19 @@ def getFilteredCentroids(img, centroids, samplingRate, threshold, imgTest):
 #Janky af, works well on mostly complete boards, poorly on boards with many missing edges
 
 
-
+    
 
     for line in lines:
         cv2.line(imgTest,line[0],line[1],(0,0,255),2)
     cycleImg(imgTest)
+
+    return lines
+
+#def regenerateMissingEdges(lines):
     
+        
+
 for filename in os.listdir(PATH):
     img = cv2.imread(PATH + filename)
     cycleImg(img)
-
-    imgGrey = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-    imgGrey = np.float32(imgGrey)
-
-    cornerMap = cv2.cornerHarris(imgGrey,HARRISBLOCKSIZE,HARRISAPERTURE,HARRISCORNERRESPONSE)
-    cornerMap = cv2.threshold(cornerMap,0.04*cornerMap.max(),255,cv2.THRESH_BINARY)[1]
-    cornerMap = np.uint8(cornerMap)
-
-    centroidArray = cv2.connectedComponentsWithStats(cornerMap)[3]
-    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.001)
-
-    imgCanny = cv2.Canny(img,50,150,apertureSize = 3)
-
-    corners = getMergedCentroidClusters(centroidArray, MINCORNERDISTANCE)
-    getFilteredCentroids(imgCanny, corners, 50, 0.5, img)
+    getFilteredEdges(img, 50, 0.5)
