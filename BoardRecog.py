@@ -211,11 +211,7 @@ def getFilteredCentroids(img, centroids, samplingRate, threshold, imgTest):
     for line in lines:
         cv2.line(imgTest,line[0],line[1],(0,0,255),2)
     cycleImg(imgTest)
-
-def regenerateMissingEdges(lines):
     
-        
-
 for filename in os.listdir(PATH):
     img = cv2.imread(PATH + filename)
     cycleImg(img)
