@@ -216,6 +216,36 @@ def getFilteredEdges(img,samplingRate, threshold):
     return lines
 
 #def regenerateMissingEdges(lines):
+
+
+
+def getSquaresFromLines(lines, pieces):
+    squares=np.zeros(8,8,1)
+    
+    lines.sort(min(lines[0], lines[1]), key=lambda x: x[1])
+    lines.sort(min(lines[0], lines[1]), key=lambda x: x[0])
+    lines.sort(lines[2], key=lambda x: x[2])
+
+    lines1 = lines[:8]
+    lines2 = lines[8:]
+
+    i=0
+    while i < len(lines1):
+        if line1[2]>=abs(0.5*np.pi):
+            for piece in pieces:
+                if piece[0][0]>line1[i]:
+                    i1=0
+                   while i1 < len(lines2):
+                        if piece[0][1]>line2[i1]:
+                            squares[i, i1] = piece[1]
+        else:
+            for piece in pieces:
+                if piece[0][1]>line2[i]:
+                    i1=0
+                   while i1 < len(lines1):
+                        if piece[0][1]>line1[i1]:
+                            squares[i1, i] = piece[1]
+    return squares
     
         
 
