@@ -217,7 +217,8 @@ def getFilteredEdges(img,samplingRate, threshold):
 
 #def regenerateMissingEdges(lines):
 
-
+def getPieces(img):
+    return np.indicies([img=img.max()[3]]).append("Red")
 
 def getSquaresFromLines(lines, pieces):
     squares=np.zeros(8,8,1)
