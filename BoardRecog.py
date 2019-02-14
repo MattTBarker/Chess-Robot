@@ -83,6 +83,7 @@ def getFilteredEdges(img,samplingRate, threshold):
 
     height-=1
     width-=1
+    #TODO
     dist=0.05*min(height, width) #Distance for merging similar lines (to be replaced by angle check on all intersecting lines asap)
 
     lines=[]
@@ -228,11 +229,16 @@ def getVanishingPoint(lines):
 
     return vanishingPoint
 
+#TODO
+#NEEDS BUG TESTING
 #Takes an array of edges and fills in the missing lines, then removes the least conforming lines to produce a 10x10 grid
 #Args - (line array in the form [(x, y), (x, y), rho])
 #Return - [sorted vertical line array of length 10 in the form [(min x, min y), (max x, max y)], sorted horizontal line array of length 10 in the form [(min x, min y), (max x, max y)]
 def getBoardLines(lines):
     lines.sort(key=lambda x: x[2])
+
+    #TODO - Factor out redundant code
+    
     lines1=None
     lines2=None
     gaps=[abs(line[2]-lines[(i-1)%len(lines)][2]) for i, line in enumerate(lines)]
@@ -332,6 +338,7 @@ def getBoardLines(lines):
             maxYPos=vLines[i][1][1] + (vLines[i+1][1][1]-vLines[i+1][1][1])//missingLines
             newLines.append(((minXPos, minYPos), (maxXPos, maxYPos)))
 
+            #TODO
             #Doesn't yet fit lines to borders
             
 
@@ -358,6 +365,7 @@ def getBoardLines(lines):
             maxYPos=vLines[i][1][1] + (vLines[i+1][1][1]-vLines[i+1][1][1])//missingLines
             newLines.append(((minXPos, minYPos), (maxXPos, maxYPos)))
 
+            #TODO
             #Doesn't yet fit lines to borders
             
 
@@ -378,12 +386,14 @@ def getBoardLines(lines):
     
     return [line[:2] for line in vLines], [line[:2] for line in hLines]
         
-        
-
+#NEEDS BUG TESTING
 def getPieces(img):
-    return np.indicies([img==img.max()[3]]).append(1)
+    img = [pix[3] for pix in img]
+    return np.indicies(img.max())
 
 
+
+#NEEDS BUG TESTING
 #Takes an 2 arrays of parralel edges and an array of piece coordinates and returns a 8x8 matrix of board states
 #Args - (vertical line array in the form [(x, y), (x, y)], horizontal line array in the form [(x, y), (x, y)], piece array in the form [(x, y), value])
 #Return - [8x8 board state matrix]
@@ -392,20 +402,13 @@ def getBoardState(lines1, lines2, pieces):
 
     i=0
     while i < len(lines1):
-        if line1[2]>=0.5*np.pi: #check moved to getBoardLines
-            for piece in pieces:
-                if piece[0][0]>line1[i]:
-                    i1=0
-                    while i1 < len(lines2):
-                        if piece[0][1]>line2[i1]:
-                                squares[i, i1] = piece[1]
-        else:
-            for piece in pieces:
-                if piece[0][1]>line2[i]:
-                    i1=0
-                    while i1 < len(lines1):
-                        if piece[0][1]>line1[i1]:
-                            squares[i1, i] = piece[1]
+        for piece in pieces:
+            if piece[0][0]>line1[i]:
+                i1=0
+                while i1 < len(lines2):
+                    if piece[0][1]>line2[i1]:
+                            squares[i, i1] = piece[1]
+
     return squares
     
         
@@ -414,8 +417,3 @@ for filename in os.listdir(PATH):
     img = cv2.imread(PATH + filename)
     cycleImg(img)
     lines=getFilteredEdges(img, 50, LINETHRESHOLD)
-##    vLines, hLines=getBoardLines(lines)
-##    for line in hLines:
-##        print(line)
-##        cv2.line(img,line[0],line[1],(0,0,255),2)
-##    cycleImg(img)
