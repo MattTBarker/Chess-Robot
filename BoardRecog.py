@@ -7,13 +7,17 @@ import os
 
 #Constants
 PATH='C:/Users/Matt/Desktop/Chessboards/'
-HARRISBLOCKSIZE=3
-HARRISAPERTURE=3
-HARRISCORNERRESPONSE=0.02
-HARRISFILTER=0.08
-MINCORNERDISTANCE=10
-CLEANEDGEBLOCKSIZE=10
-CLEANEDGEBIAS=1
+                        #RECOMMENDED
+HARRISTHRESHOLD=0.04    #0.04
+HARRISAPERTURE=3        #3
+MINCORNERDISTANCE=10    #10
+CANNYDILATION=3         #3
+CLEANEDGEBLOCKSIZE=10   #10
+CLEANEDGEBIAS=1.0       #1
+LINETHRESHOLD=0.5       #0.5
+
+vanishingPoint=None
+vanishingPoint1=None
 
 def cycleImg(img):
     cv2.imshow('chessboard',img)
@@ -54,29 +58,32 @@ def softDilate(img, pixels=1):
                     img1[y,x]|=img[y+i, x+j]
                     img1[y,x]//=0.9
     return img1
-
-#Takes an image and returns the chess board edges in that image
+    
+#Takes an image and returns the chess board aligned edges in that image
 #Args - (image as numpy array, pixel interval between checking pixel value along suspected edges, threshold floating point for what qualifies as an edge from 0-1)
 #Return - [(x,y),(x1,y1),rho]
 def getFilteredEdges(img,samplingRate, threshold):
     imgTest=img.copy()
 
-    cornerMap = cv2.cornerHarris(np.float32(cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)),HARRISBLOCKSIZE,HARRISAPERTURE,HARRISCORNERRESPONSE)
-    cornerMap = cv2.threshold(cornerMap,0.04*cornerMap.max(),255,cv2.THRESH_BINARY)[1]
+    cornerMap = cv2.cornerHarris(np.float32(cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)),3,HARRISAPERTURE,0.02)
+    cornerMap = cv2.threshold(cornerMap,HARRISTHRESHOLD*cornerMap.max(),255,cv2.THRESH_BINARY)[1]
     cornerMap = np.uint8(cornerMap)
 
     centroids = getMergedCentroidClusters(cv2.connectedComponentsWithStats(cornerMap)[3], MINCORNERDISTANCE)
-#    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.001)
 
     height, width = img.shape[:2]
-    distance = 0.1*max(img.shape[:2])
+    distance = 0.1*max(img.shape[:2]) #Minimum distance between centroids to be viable for line check
 
     imgCanny = cv2.Canny(img,50,150,apertureSize = 3)
-    img = cv2.dilate(imgCanny,np.ones((3,3),np.uint8),iterations = 1)
+    cycleImg(imgCanny)
+    imgCannyTest = cv2.cvtColor(imgCanny,cv2.COLOR_GRAY2RGB)
+    imgCannyTest[cornerMap>0.01*cornerMap.max()]=[0,0,255]
+    cycleImg(imgCannyTest)
+    img = cv2.dilate(imgCanny,np.ones((CANNYDILATION,CANNYDILATION),np.uint8),iterations = 1)
 
     height-=1
     width-=1
-    dist=0.05*min(height, width)
+    dist=0.05*min(height, width) #Distance for merging similar lines (to be replaced by angle check on all intersecting lines asap)
 
     lines=[]
 
@@ -144,33 +151,7 @@ def getFilteredEdges(img,samplingRate, threshold):
                 
     lines = set(lines)
 
-#Angle filter probably unnecessary
-
-##    angles = [[1, lines[0][3]]]
-##
-##    for line in lines:
-##        flag=False
-##        i=0
-##        while i<len(angles):
-##            if abs(line[3]-angles[i][1])%(2*np.pi)<0.05*np.pi:
-##                flag=True
-##                break
-##            i+=1
-##        if flag:
-##            angles[i][1]=angles[i][1]+line[3]
-##            angles[i][1]%=2*np.pi
-##            angles[i][1]/=2
-##            angles[i][0]+=1
-##        else:
-##            angles.append([1, line[3]])
-##
-##    angle=max(angles, key=lambda x: x[0])[1]
-##    angles = [x for x in angles if abs(angle-x[1])%(2*np.pi)>0.35*np.pi]
-##    angle1=max(angles, key=lambda x: x[0])[1]
-##             
-##    lines = [line for line in lines if abs(angle-line[3])%(2*np.pi)<0.15*np.pi or abs(angle1-line[3])%(2*np.pi)<0.15*np.pi]
-
-    maxLineValue=max(lines, key=lambda l: l[2])[2]*threshold
+    maxLineValue=max(lines, key=lambda x: x[2])[2]*threshold
     lines = [[line[0], line[1], np.arctan2(line[0][1]-line[1][1], line[0][0]-line[1][0])%np.pi, set(), 0] for line in lines if line[2] >= maxLineValue]
 
 #Fast Angle Filter
@@ -201,8 +182,8 @@ def getFilteredEdges(img,samplingRate, threshold):
                 bestScore=i
         line[4]+=bestScore
 
-    maxAngleVariance=max(lines, key=lambda l: l[4])[4]*0.5
-    lines = [(line[0], line[1], line[2]) for line in lines if line[4] >= maxAngleVariance]
+    maxAngleVariance=max(lines, key=lambda x: x[4])[4]*0.5
+    lines = [(line[0], line[1], line[2]%np.pi) for line in lines if line[4] >= maxAngleVariance]
 
 #Janky af, works well on mostly complete boards, poorly on boards with many missing edges
 
@@ -215,35 +196,214 @@ def getFilteredEdges(img,samplingRate, threshold):
 
     return lines
 
-#def regenerateMissingEdges(lines):
+def getVanishingPoint(lines):
+    lines=[[line[0], line[1], line[2], set()] for line in lines]
+    for line in lines:
+        parallel=0
+        for line1 in lines:
+            if abs(line[2]-line1[2])%np.pi<0.01*np.pi:
+                parallel+=1
+                continue
+
+            if parallel>=3:
+                return None
+                   
+            intersectX=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][0]-line[1][0])-(line1[0][0]-line1[1][0])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
+            intersectY=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
+            intersection = (int(intersectX), int(intersectY))
+            line[3].add(intersection)
+
+    vanishingPoint=None
+    for line in lines:
+        bestScore=0
+        for point in line[3]:
+            accuracy = np.sqrt((np.mean((line[0][1], line[1][1]))//2-point[1])**2 + (np.mean((line[0][0], line[1][0]))//2-point[0])**2)*0.1
+            i=0
+            for point1 in line[3]:
+                if abs(point[0]-point1[0])<accuracy and abs(point[1]-point1[1])<accuracy:
+                    i+=1
+            if i>bestScore:
+                bestScore=i
+                vanishingPoint = point
+
+    return vanishingPoint
+
+#Takes an array of edges and fills in the missing lines, then removes the least conforming lines to produce a 10x10 grid
+#Args - (line array in the form [(x, y), (x, y), rho])
+#Return - [sorted vertical line array of length 10 in the form [(min x, min y), (max x, max y)], sorted horizontal line array of length 10 in the form [(min x, min y), (max x, max y)]
+def getBoardLines(lines):
+    lines.sort(key=lambda x: x[2])
+    lines1=None
+    lines2=None
+    gaps=[abs(line[2]-lines[(i-1)%len(lines)][2]) for i, line in enumerate(lines)]
+
+    maxGap=max(gaps)
+    maxGapIndex=gaps.index(maxGap)
+    gaps[maxGapIndex]=0
+    maxGap1=max(gaps)
+    maxGapIndex1=gaps.index(maxGap1)
+
+    
+    if maxGap1 < 0.5*maxGap:
+        lines1=lines[:maxGapIndex]
+        lines2=lines[maxGapIndex:]
+    else:
+        lines1=lines[:maxGapIndex]
+        lines2=lines[maxGapIndex:maxGapIndex1]
+        lines1+=lines[maxGapIndex1:]
+
+    vLines=None
+    hLines=None
+
+    if abs(90-np.mean([line[2] for line in lines1])) >= abs(90-np.mean([line[2] for line in lines2])):
+        vLines=lines1
+        hLines=lines2
+    else:
+        vLines=lines2
+        hLines=lines1
+
+    vLines = [(min(line[:2], key=lambda x: x[1]), max(line[:2], key=lambda x: x[1]), line[2]) for line in vLines]
+    hLines = [(min(line[:2], key=lambda x: x[0]), max(line[:2], key=lambda x: x[0]), line[2]) for line in hLines]
+
+    vLines.sort(key=lambda x: x[0][0])
+    hLines.sort(key=lambda x: x[0][1])
+    vLines.sort(key=lambda x: x[0][1])
+    hLines.sort(key=lambda x: x[0][0])
+
+    vVanishingPoint=getVanishingPoint(vLines)
+    hVanishingPoint=getVanishingPoint(hLines)
+
+    distances=[]
+    if vVanishingPoint is not None:
+        for i in range(len(vLines)-1):
+            distances.append(np.mean(((vVanishingPoint[1] - vLines[i+1][0][1])/(vVanishingPoint[1] - vLines[i][0][1]),(vVanishingPoint[1] - vLines[i+1][1][1])/(vVanishingPoint[1] - vLines[i][1][1]))))
+    else:
+        for i in range(len(vLines)-1):
+            distances.append(np.mean((vLines[i+1][0][1]/vLines[i][0][1],vLines[i+1][1][1]/vLines[i][1][1]))) 
+               
+    vDistances = distances.copy()
+    distances.sort()
+    maxDist=distances[-1]-distances[0]
+    distances1 = [maxDist//distance for distance in distances]
+
+    vSquareSize=None
+
+    for i in range(len(distances)):
+        if distances1.count(distances1[i])>=3:
+           vSquareSize=distances[i]
+           break
+        
+
+    distances=[]
+    if hVanishingPoint is not None:
+        for i in range(len(hLines)-1):
+            distances.append(np.mean(((hVanishingPoint[0] - hLines[i+1][0][0])/(hVanishingPoint[0] - hLines[i][0][0]),(hVanishingPoint[0] - hLines[i+1][1][0])/(hVanishingPoint[0] - hLines[i][1][0]))))
+    else:
+        for i in range(len(hLines)-1):
+            distances.append(np.mean((hLines[i+1][0][0]/hLines[i][0][0],hLines[i+1][1][0]/hLines[i][1][0])))
+
+    hDistances = distances.copy()
+    distances.sort()
+    maxDist=distances[-1]-distances[0]
+    distances1 = [maxDist//distance for distance in distances]
+
+    hSquareSize=None
+
+    for i in range(len(distances)):
+        if distances1.count(distances1[i])>=3:
+           hSquareSize=distances[i]
+           break
+
+    if vSquareSize is None or hSquareSize is None:
+        return None
+
+    #Fill in missing lines
+
+    newLines=[]
+    for i in range(len(vLines)-1):
+        missingLines = int(round(vDistances[i]/vSquareSize))
+        if missingLines <= 1:
+            continue
+
+        for i1 in range(missingLines):
+            minXPos=vLines[i][0][0] + (vLines[i+1][0][0]-vLines[i+1][0][0])//missingLines
+            maxXPos=vLines[i][1][0] + (vLines[i+1][1][0]-vLines[i+1][1][0])//missingLines
+            minYPos=vLines[i][0][1] + (vLines[i+1][0][1]-vLines[i+1][0][1])//missingLines
+            maxYPos=vLines[i][1][1] + (vLines[i+1][1][1]-vLines[i+1][1][1])//missingLines
+            newLines.append(((minXPos, minYPos), (maxXPos, maxYPos)))
+
+            #Doesn't yet fit lines to borders
+            
+
+    i=0
+    while i < len(vLines)-1:
+        if vDistances[i] < vSquareSize:
+            del vLines[i]
+            del vDistances[i]
+            continue
+        i+=1
+
+    vLines+=newLines
+
+    newLines=[]
+    for i in range(len(hLines)-1):
+        missingLines = int(round(hDistances[i]/hSquareSize))
+        if missingLines == 1:
+            continue
+
+        for i1 in range(missingLines):
+            minXPos=vLines[i][0][0] + (vLines[i+1][0][0]-vLines[i+1][0][0])//missingLines
+            maxXPos=vLines[i][1][0] + (vLines[i+1][1][0]-vLines[i+1][1][0])//missingLines
+            minYPos=vLines[i][0][1] + (vLines[i+1][0][1]-vLines[i+1][0][1])//missingLines
+            maxYPos=vLines[i][1][1] + (vLines[i+1][1][1]-vLines[i+1][1][1])//missingLines
+            newLines.append(((minXPos, minYPos), (maxXPos, maxYPos)))
+
+            #Doesn't yet fit lines to borders
+            
+
+    i=0
+    while i < len(hLines)-1:
+        if hDistances[i] < hSquareSize:
+            del hLines[i]
+            del hDistances[i]
+            continue
+        i+=1
+
+    hLines+=newLines
+
+    vLines.sort(key=lambda x: x[0][0])
+    hLines.sort(key=lambda x: x[0][1])
+    vLines.sort(key=lambda x: x[0][1])
+    hLines.sort(key=lambda x: x[0][0])
+    
+    return [line[:2] for line in vLines], [line[:2] for line in hLines]
+        
+        
 
 def getPieces(img):
-    return np.indicies([img=img.max()[3]]).append("Red")
+    return np.indicies([img==img.max()[3]]).append(1)
 
-def getSquaresFromLines(lines, pieces):
+
+#Takes an 2 arrays of parralel edges and an array of piece coordinates and returns a 8x8 matrix of board states
+#Args - (vertical line array in the form [(x, y), (x, y)], horizontal line array in the form [(x, y), (x, y)], piece array in the form [(x, y), value])
+#Return - [8x8 board state matrix]
+def getBoardState(lines1, lines2, pieces):
     squares=np.zeros(8,8,1)
-    
-    lines.sort(min(lines[0], lines[1]), key=lambda x: x[1])
-    lines.sort(min(lines[0], lines[1]), key=lambda x: x[0])
-    lines.sort(lines[2], key=lambda x: x[2])
-
-    lines1 = lines[:8]
-    lines2 = lines[8:]
 
     i=0
     while i < len(lines1):
-        if line1[2]>=abs(0.5*np.pi):
+        if line1[2]>=0.5*np.pi: #check moved to getBoardLines
             for piece in pieces:
                 if piece[0][0]>line1[i]:
                     i1=0
-                   while i1 < len(lines2):
+                    while i1 < len(lines2):
                         if piece[0][1]>line2[i1]:
-                            squares[i, i1] = piece[1]
+                                squares[i, i1] = piece[1]
         else:
             for piece in pieces:
                 if piece[0][1]>line2[i]:
                     i1=0
-                   while i1 < len(lines1):
+                    while i1 < len(lines1):
                         if piece[0][1]>line1[i1]:
                             squares[i1, i] = piece[1]
     return squares
@@ -253,4 +413,9 @@ def getSquaresFromLines(lines, pieces):
 for filename in os.listdir(PATH):
     img = cv2.imread(PATH + filename)
     cycleImg(img)
-    getFilteredEdges(img, 50, 0.5)
+    lines=getFilteredEdges(img, 50, LINETHRESHOLD)
+##    vLines, hLines=getBoardLines(lines)
+##    for line in hLines:
+##        print(line)
+##        cv2.line(img,line[0],line[1],(0,0,255),2)
+##    cycleImg(img)
