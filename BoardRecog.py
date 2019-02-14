@@ -16,9 +16,6 @@ CLEANEDGEBLOCKSIZE=10   #10
 CLEANEDGEBIAS=1.0       #1
 LINETHRESHOLD=0.5       #0.5
 
-vanishingPoint=None
-vanishingPoint1=None
-
 def cycleImg(img):
     cv2.imshow('chessboard',img)
     if cv2.waitKey(0) & 0xFF:
