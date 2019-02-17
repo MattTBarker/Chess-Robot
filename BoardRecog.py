@@ -6,15 +6,19 @@ import numpy as np
 import os
 
 #Constants
-PATH='C:/Users/Matt/Desktop/Chessboards/'
+PATH='C:/Users/Matt/Desktop/Testboards/'
                         #RECOMMENDED
-HARRISTHRESHOLD=0.04    #0.04
+HARRISTHRESHOLD=0.04    #0.16
 HARRISAPERTURE=3        #3
 MINCORNERDISTANCE=10    #10
 CANNYDILATION=3         #3
 CLEANEDGEBLOCKSIZE=10   #10
 CLEANEDGEBIAS=1.0       #1
+LINESAMPLERATE=50       #50
 LINETHRESHOLD=0.5       #0.5
+
+CAMERA_MATRIX=np.load("Camera_Calibration_Mtx.npy")
+CAMERA_DISTORTION=np.load("Camera_Calibration_Dist.npy")
 
 def cycleImg(img):
     cv2.imshow('chessboard',img)
@@ -412,5 +416,16 @@ def getBoardState(lines1, lines2, pieces):
 
 for filename in os.listdir(PATH):
     img = cv2.imread(PATH + filename)
+    img = img[:,:img.shape[1]//2]
+    img = cv2.resize(img, (0,0), fx=0.5, fy=0.5)
     cycleImg(img)
-    lines=getFilteredEdges(img, 50, LINETHRESHOLD)
+    h,  w = img.shape[:2]
+    newcameramtx, roi=cv2.getOptimalNewCameraMatrix(CAMERA_MATRIX,CAMERA_DISTORTION,(w,h),1,(w,h))
+    img = cv2.undistort(img, CAMERA_MATRIX, CAMERA_DISTORTION, None, newcameramtx)
+    cycleImg(img)
+    lines=getFilteredEdges(img, LINESAMPLERATE, LINETHRESHOLD)
+##    vLines, hLines=getBoardLines(lines)
+##    for line in hLines:
+##        print(line)
+##        cv2.line(img,line[0],line[1],(0,0,255),2)
+##    cycleImg(img)
