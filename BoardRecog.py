@@ -9,6 +9,7 @@ import os
 PATH='C:/Users/Matt/Desktop/Testboards/'
                         #RECOMMENDED
 HARRISTHRESHOLD=0.04    #0.16
+CHESSTHRESHOLD=0.5      #0.5
 HARRISAPERTURE=3        #3
 MINCORNERDISTANCE=10    #10
 CANNYDILATION=3         #3
@@ -16,6 +17,7 @@ CLEANEDGEBLOCKSIZE=10   #10
 CLEANEDGEBIAS=1.0       #1
 LINESAMPLERATE=50       #50
 LINETHRESHOLD=0.5       #0.5
+CORNERDETECTIONTYPE=1   #0
 
 CAMERA_MATRIX=np.load("Camera_Calibration_Mtx.npy")
 CAMERA_DISTORTION=np.load("Camera_Calibration_Dist.npy")
@@ -24,6 +26,38 @@ def cycleImg(img):
     cv2.imshow('chessboard',img)
     if cv2.waitKey(0) & 0xFF:
         cv2.destroyAllWindows()
+
+#Takes an image and transforms to a field of how chessboard-corner-like each pixel is
+#Args - (greyscale integer image, how far to sample from each pixel, board rotation (False for straight, True for diagonal))
+#Return - [uint corner mask]
+def cornerChessboard(img, buffer=3, transpose=False):
+    height, width = img.shape[:2]
+    imgChess = np.zeros([height,width], dtype=int)
+
+    for i in range(buffer, height-buffer):
+        for j in range(buffer, width-buffer):
+            score = 0
+            score1 = 0
+
+            score+=abs(img[i-buffer, j-buffer]-img[i-buffer, j+buffer])
+            score+=abs(img[i-buffer, j+buffer]-img[i+buffer, j+buffer])
+            score+=abs(img[i+buffer, j+buffer]-img[i+buffer, j-buffer])
+            score+=abs(img[i+buffer, j-buffer]-img[i-buffer, j-buffer])
+            score-=2*abs(img[i-buffer, j-buffer]-img[i+buffer, j+buffer])
+            score-=2*abs(img[i-buffer, j+buffer]-img[i+buffer, j-buffer])
+            score-=abs(img[i+buffer, j]-img[i, j+buffer])
+            score-=abs(img[i, j+buffer]-img[i-buffer, j])
+            score-=abs(img[i-buffer, j]-img[i, j-buffer])
+            score-=abs(img[i, j-buffer]-img[i+buffer, j])
+            score+=2*abs(img[i+buffer, j]-img[i-buffer, j])
+            score+=2*abs(img[i, j+buffer]-img[i, j-buffer])
+
+            if transpose:
+                imgChess[i, j]=max(0,-1*score)
+            else:
+                imgChess[i, j]=max(0,score)
+
+    return imgChess.astype("uint8")
 
 #Averages nearby centroids into a single point
 def getMergedCentroidClusters(centroids, distance=5):
@@ -63,14 +97,23 @@ def softDilate(img, pixels=1):
 #Takes an image and returns the chess board aligned edges in that image
 #Args - (image as numpy array, pixel interval between checking pixel value along suspected edges, threshold floating point for what qualifies as an edge from 0-1)
 #Return - [(x,y),(x1,y1),rho]
-def getFilteredEdges(img,samplingRate, threshold):
+def getFilteredEdges(img, samplingRate, threshold, cornerType):
     imgTest=img.copy()
 
-    cornerMap = cv2.cornerHarris(np.float32(cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)),3,HARRISAPERTURE,0.02)
-    cornerMap = cv2.threshold(cornerMap,HARRISTHRESHOLD*cornerMap.max(),255,cv2.THRESH_BINARY)[1]
+    if cornerType==0:
+        cornerMap = cv2.cornerHarris(np.float32(cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)),3,HARRISAPERTURE,0.02)
+    elif cornerType==1:
+        cornerMap = cornerChessboard(cv2.cvtColor(img,cv2.COLOR_BGR2GRAY).astype("int"))
+    else:
+        raise SystemExit
+    cornerMap = cv2.threshold(cornerMap,HARRISTHRESHOLD*cornerMap.max() if cornerType==0 else CHESSTHRESHOLD*cornerMap.max(), 255,cv2.THRESH_BINARY)[1]
     cornerMap = np.uint8(cornerMap)
 
-    centroids = getMergedCentroidClusters(cv2.connectedComponentsWithStats(cornerMap)[3], MINCORNERDISTANCE)
+    cornerMap = cv2.erode(cornerMap,np.ones((1,1)),iterations = 1)
+    cornerMap = cv2.dilate(cornerMap,np.ones((4,4)),iterations = 1)
+
+    #centroids = getMergedCentroidClusters(cv2.connectedComponentsWithStats(cornerMap)[3], MINCORNERDISTANCE)
+    centroids = cv2.connectedComponentsWithStats(cornerMap)[3]
 
     height, width = img.shape[:2]
     distance = 0.1*max(img.shape[:2]) #Minimum distance between centroids to be viable for line check
@@ -423,7 +466,7 @@ for filename in os.listdir(PATH):
     newcameramtx, roi=cv2.getOptimalNewCameraMatrix(CAMERA_MATRIX,CAMERA_DISTORTION,(w,h),1,(w,h))
     img = cv2.undistort(img, CAMERA_MATRIX, CAMERA_DISTORTION, None, newcameramtx)
     cycleImg(img)
-    lines=getFilteredEdges(img, LINESAMPLERATE, LINETHRESHOLD)
+    lines=getFilteredEdges(img, LINESAMPLERATE, LINETHRESHOLD, 1)
 ##    vLines, hLines=getBoardLines(lines)
 ##    for line in hLines:
 ##        print(line)
