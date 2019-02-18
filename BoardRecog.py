@@ -60,7 +60,7 @@ def cornerChessboard(img, buffer=3, transpose=False):
     return imgChess.astype("uint8")
 
 #Averages nearby centroids into a single point
-def getMergedCentroidClusters(centroids, distance=5):
+def getMergedCentroidClusters(centroids, distance=20):
     corners = list({(int(l[0]), int(l[1])) for l in centroids})
     while True:
         flag=True
@@ -127,8 +127,7 @@ def getFilteredEdges(img, samplingRate, threshold, cornerType):
 
     height-=1
     width-=1
-    #TODO
-    dist=0.05*min(height, width) #Distance for merging similar lines (to be replaced by angle check on all intersecting lines asap)
+    dist=0.1*min(height, width) #Distance for merging similar lines
 
     lines=[]
 
@@ -206,10 +205,14 @@ def getFilteredEdges(img, samplingRate, threshold, cornerType):
             if abs(line[2]-line1[2])%np.pi<0.01*np.pi:
                 line[4]+=1
                 continue
+
+            #TODO intersection equation is wrong
                 
-            intersectX=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][0]-line[1][0])-(line1[0][0]-line1[1][0])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
-            intersectY=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
-            intersection = (int(intersectX), int(intersectY))
+##            intersectX=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][0]-line[1][0])-(line1[0][0]-line1[1][0])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
+##            intersectY=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
+            intersection = line_intersection(line[:2], line1[:2])
+            if intersection is None:
+                continue
             if intersection[0]>0 and intersection[0]<width and intersection[1]>0 and intersection[1]<height:
                 continue
             line[3].add(intersection)
@@ -237,9 +240,29 @@ def getFilteredEdges(img, samplingRate, threshold, cornerType):
 
     for line in lines:
         cv2.line(imgTest,line[0],line[1],(0,0,255),2)
+##        for line1 in lines:
+##            if ((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0])) != 0 and ((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0])) != 0:
+##                intersectX=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][0]-line[1][0])-(line1[0][0]-line1[1][0])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
+##                intersectY=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
+##                intersection = (int(intersectX), int(intersectY))
+##                cv2.line(imgTest,(intersection[0],intersection[1]),(intersection[0],intersection[1]+5),(0,255,0),3)
+        cv2.line(imgTest,(intersection[0],intersection[1]),(intersection[0],intersection[1]+5),(0,255,0),3)
     cycleImg(imgTest)
 
     return lines
+
+def line_intersection(line1, line2):
+    xdiff = (line1[0][0] - line1[1][0], line2[0][0] - line2[1][0])
+    ydiff = (line1[0][1] - line1[1][1], line2[0][1] - line2[1][1])
+
+    div = np.det(xdiff, ydiff)
+    if div == 0:
+       return None
+
+    d = (np.det(*line1), np.det(*line2))
+    x = np.det(d, xdiff) / div
+    y = np.det(d, ydiff) / div
+    return (int(x), int(y))
 
 def getVanishingPoint(lines):
     lines=[[line[0], line[1], line[2], set()] for line in lines]
@@ -252,6 +275,8 @@ def getVanishingPoint(lines):
 
             if parallel>=3:
                 return None
+
+            #TODO intersection equation refactored
                    
             intersectX=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][0]-line[1][0])-(line1[0][0]-line1[1][0])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
             intersectY=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
@@ -463,7 +488,7 @@ for filename in os.listdir(PATH):
     img = cv2.resize(img, (0,0), fx=0.5, fy=0.5)
     cycleImg(img)
     h,  w = img.shape[:2]
-    newcameramtx, roi=cv2.getOptimalNewCameraMatrix(CAMERA_MATRIX,CAMERA_DISTORTION,(w,h),1,(w,h))
+    newcameramtx, roi=cv2.getOptimalNewCameraMatrix(CAMERA_MATRIX,CAMERA_DISTORTION,(w,h),0,(w,h))
     img = cv2.undistort(img, CAMERA_MATRIX, CAMERA_DISTORTION, None, newcameramtx)
     cycleImg(img)
     lines=getFilteredEdges(img, LINESAMPLERATE, LINETHRESHOLD, 1)
