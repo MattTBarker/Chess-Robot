@@ -105,7 +105,7 @@ def getFilteredEdges(img, samplingRate, threshold, cornerType):
     elif cornerType==1:
         cornerMap = cornerChessboard(cv2.cvtColor(img,cv2.COLOR_BGR2GRAY).astype("int"))
     else:
-        raise SystemExit
+        raise Exception('corner type undefined')
     cornerMap = cv2.threshold(cornerMap,HARRISTHRESHOLD*cornerMap.max() if cornerType==0 else CHESSTHRESHOLD*cornerMap.max(), 255,cv2.THRESH_BINARY)[1]
     cornerMap = np.uint8(cornerMap)
 
