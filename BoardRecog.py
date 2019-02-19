@@ -8,16 +8,19 @@ import os
 #Constants
 PATH='C:/Users/Matt/Desktop/Testboards/'
                         #RECOMMENDED
-HARRISTHRESHOLD=0.04    #0.16
-CHESSTHRESHOLD=0.5      #0.5
 HARRISAPERTURE=3        #3
+CORNERDETECTIONTYPE=1   #0
+HARRISTHRESHOLD=0.01    #0.16
+CHESSTHRESHOLD=0.9      #0.5
+LINETHRESHOLD=0.3       #0.5
 MINCORNERDISTANCE=10    #10
 CANNYDILATION=3         #3
 CLEANEDGEBLOCKSIZE=10   #10
-CLEANEDGEBIAS=1.0       #1
+CLEANEDGEBIAS=1.5       #1
 LINESAMPLERATE=50       #50
-LINETHRESHOLD=0.5       #0.5
-CORNERDETECTIONTYPE=1   #0
+LINESCORINGTYPE=1       #0
+MINLINELENGTH=4         #4
+CONVERGENCEACCURACY=0.3 #0.2
 
 CAMERA_MATRIX=np.load("Camera_Calibration_Mtx.npy")
 CAMERA_DISTORTION=np.load("Camera_Calibration_Dist.npy")
@@ -109,7 +112,7 @@ def getFilteredEdges(img, samplingRate, threshold, cornerType):
     cornerMap = cv2.threshold(cornerMap,HARRISTHRESHOLD*cornerMap.max() if cornerType==0 else CHESSTHRESHOLD*cornerMap.max(), 255,cv2.THRESH_BINARY)[1]
     cornerMap = np.uint8(cornerMap)
 
-    cornerMap = cv2.erode(cornerMap,np.ones((1,1)),iterations = 1)
+##    cornerMap = cv2.erode(cornerMap,np.ones((1,1)),iterations = 1)
     cornerMap = cv2.dilate(cornerMap,np.ones((4,4)),iterations = 1)
 
     #centroids = getMergedCentroidClusters(cv2.connectedComponentsWithStats(cornerMap)[3], MINCORNERDISTANCE)
@@ -173,10 +176,17 @@ def getFilteredEdges(img, samplingRate, threshold, cornerType):
 
             lineValue=0
 
+            lineLength=0
             for i in range(samplingRate):
                 x=int(edgeIntercept[0]+i*xStep)
                 y=int(edgeIntercept[1]+i*yStep)
-                lineValue += max(img[y, x]-CLEANEDGEBIAS*cv2.mean(img[max(0,y-CLEANEDGEBLOCKSIZE):min(height,y+CLEANEDGEBLOCKSIZE), max(0,x-CLEANEDGEBLOCKSIZE):min(width,x+CLEANEDGEBLOCKSIZE)])[0], 0)
+                pointValue=img[y, x]-CLEANEDGEBIAS*cv2.mean(img[max(0,y-CLEANEDGEBLOCKSIZE):min(height,y+CLEANEDGEBLOCKSIZE), max(0,x-CLEANEDGEBLOCKSIZE):min(width,x+CLEANEDGEBLOCKSIZE)])[0]
+                if pointValue > 0:
+                    lineLength+=1
+                    if LINESCORINGTYPE == 0 or lineLength>=MINLINELENGTH:
+                        lineValue += pointValue
+                else:
+                    lineLength=0
 
             flag=True
             i=0
@@ -208,9 +218,9 @@ def getFilteredEdges(img, samplingRate, threshold, cornerType):
 
             #TODO intersection equation is wrong
                 
-##            intersectX=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][0]-line[1][0])-(line1[0][0]-line1[1][0])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
-##            intersectY=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
-            intersection = line_intersection(line[:2], line1[:2])
+            intersectX=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][0]-line[1][0])-(line1[0][0]-line1[1][0])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
+            intersectY=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
+            intersection = (int(intersectX), int(intersectY))
             if intersection is None:
                 continue
             if intersection[0]>0 and intersection[0]<width and intersection[1]>0 and intersection[1]<height:
@@ -221,7 +231,7 @@ def getFilteredEdges(img, samplingRate, threshold, cornerType):
     for line in lines:
         bestScore=0
         for point in line[3]:
-            accuracy = np.sqrt(abs(height//2-point[1])**2 + abs(width//2-point[0])**2)*0.1
+            accuracy = np.sqrt(abs(height//2-point[1])**2 + abs(width//2-point[0])**2)*CONVERGENCEACCURACY
             i=0
             for point1 in line[3]:
                 if abs(point[0]-point1[0])<accuracy and abs(point[1]-point1[1])<accuracy:
@@ -246,23 +256,9 @@ def getFilteredEdges(img, samplingRate, threshold, cornerType):
 ##                intersectY=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
 ##                intersection = (int(intersectX), int(intersectY))
 ##                cv2.line(imgTest,(intersection[0],intersection[1]),(intersection[0],intersection[1]+5),(0,255,0),3)
-        cv2.line(imgTest,(intersection[0],intersection[1]),(intersection[0],intersection[1]+5),(0,255,0),3)
     cycleImg(imgTest)
 
     return lines
-
-def line_intersection(line1, line2):
-    xdiff = (line1[0][0] - line1[1][0], line2[0][0] - line2[1][0])
-    ydiff = (line1[0][1] - line1[1][1], line2[0][1] - line2[1][1])
-
-    div = np.det(xdiff, ydiff)
-    if div == 0:
-       return None
-
-    d = (np.det(*line1), np.det(*line2))
-    x = np.det(d, xdiff) / div
-    y = np.det(d, ydiff) / div
-    return (int(x), int(y))
 
 def getVanishingPoint(lines):
     lines=[[line[0], line[1], line[2], set()] for line in lines]
@@ -484,14 +480,14 @@ def getBoardState(lines1, lines2, pieces):
 
 for filename in os.listdir(PATH):
     img = cv2.imread(PATH + filename)
-    img = img[:,:img.shape[1]//2]
+    img = img[:,img.shape[1]//2:]
     img = cv2.resize(img, (0,0), fx=0.5, fy=0.5)
     cycleImg(img)
     h,  w = img.shape[:2]
     newcameramtx, roi=cv2.getOptimalNewCameraMatrix(CAMERA_MATRIX,CAMERA_DISTORTION,(w,h),0,(w,h))
     img = cv2.undistort(img, CAMERA_MATRIX, CAMERA_DISTORTION, None, newcameramtx)
     cycleImg(img)
-    lines=getFilteredEdges(img, LINESAMPLERATE, LINETHRESHOLD, 1)
+    lines=getFilteredEdges(img, LINESAMPLERATE, LINETHRESHOLD, CORNERDETECTIONTYPE)
 ##    vLines, hLines=getBoardLines(lines)
 ##    for line in hLines:
 ##        print(line)

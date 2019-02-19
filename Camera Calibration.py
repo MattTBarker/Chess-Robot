@@ -42,6 +42,31 @@ for fname in os.listdir(PATH):
 
 cv2.destroyAllWindows()
 
+for fname in os.listdir(PATH):
+    img = cv2.imread(PATH+fname)
+    img = img[:,img.shape[1]//2:]
+    img = cv2.resize(img, (0,0), fx=0.5, fy=0.5)
+    gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+    if size is None:
+        size=gray.shape[::-1]
+
+    # Find the chess board corners
+    ret, corners = cv2.findChessboardCorners(gray, (7,6),None)
+
+    # If found, add object points, image points (after refining them)
+    if ret == True:
+        objpoints.append(objp)
+
+        corners2=cv2.cornerSubPix(gray,corners,(11,11),(-1,-1),criteria)
+        imgpoints.append(corners2)
+
+        # Draw and display the corners
+        cv2.drawChessboardCorners(img, (7,6), corners2,ret)
+        cv2.imshow('img',img)
+        cv2.waitKey(500)
+
+cv2.destroyAllWindows()
+
 ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, size,None,None)
 
 print(mtx)
