@@ -215,8 +215,6 @@ def getFilteredEdges(img, samplingRate, threshold, cornerType):
             if abs(line[2]-line1[2])%np.pi<0.01*np.pi:
                 line[4]+=1
                 continue
-
-            #TODO intersection equation is wrong
                 
             intersectX=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][0]-line[1][0])-(line1[0][0]-line1[1][0])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
             intersectY=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
@@ -271,8 +269,6 @@ def getVanishingPoint(lines):
 
             if parallel>=3:
                 return None
-
-            #TODO intersection equation refactored
                    
             intersectX=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][0]-line[1][0])-(line1[0][0]-line1[1][0])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
             intersectY=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
@@ -480,7 +476,7 @@ def getBoardState(lines1, lines2, pieces):
 
 for filename in os.listdir(PATH):
     img = cv2.imread(PATH + filename)
-    img = img[:,img.shape[1]//2:]
+    img = img[:,:img.shape[1]//2]
     img = cv2.resize(img, (0,0), fx=0.5, fy=0.5)
     cycleImg(img)
     h,  w = img.shape[:2]
