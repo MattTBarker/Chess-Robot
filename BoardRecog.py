@@ -1,15 +1,16 @@
-import sys
-sys.path.append('c:/users/matt/appdata/local/programs/python/python36-32/lib/site-packages')
-
 import cv2
 import numpy as np
-import os
+from os import listdir
+
+import random as rand
 
 #Constants
-PATH='C:/Users/Matt/Desktop/Testboards/'
+PATH='C:/Users/Matt/Desktop/Chess Robot/Testboards/'
+DEBUG=False
+
                         #RECOMMENDED
 HARRISAPERTURE=3        #3
-CORNERDETECTIONTYPE=0   #0
+CORNERDETECTIONTYPE=0   #0 (HARRIS)
 HARRISTHRESHOLD=0.01    #0.16
 CHESSTHRESHOLD=0.8      #0.5
 LINETHRESHOLD=0.2       #0.5
@@ -98,6 +99,8 @@ def softDilate(img, pixels=1):
                     img1[y,x]//=0.9
     return img1
 
+#Args - (Tuple representing point on line in form (pointX, pointY), Tuple representing point on line in form (point1X, point1Y))
+#Return - boolean truth of divergence, x coord, y coord
 def getIntersection(line, line1):
     line = line[:2]
     line1 = line1[:2]
@@ -139,16 +142,18 @@ def getFilteredEdges(img, samplingRate, threshold, cornerType):
     distance = 0.2*max(img.shape[:2]) #Minimum distance between centroids to be viable for line check
 
     imgCanny = cv2.Canny(img,50,150,apertureSize = 3)
-    cycleImg(imgCanny)
-    imgCannyTest = cv2.cvtColor(imgCanny,cv2.COLOR_GRAY2RGB)
-    imgCannyTest[cornerMap>0]=[0,0,255]
-    cycleImg(imgCannyTest)
-    mask=np.zeros((height+1, width+1), dtype=int)
-    for corner in centroids:
-        mask[int(corner[1]),int(corner[0])]=255
-    mask = cv2.dilate(mask.astype("uint8"),np.ones((4,4)),iterations = 1)
-    imgCannyTest[mask==255]=[255,0,0]
-    cycleImg(imgCannyTest)
+    if DEBUG:
+        cycleImg(imgCanny)
+    if DEBUG:
+        imgCannyTest = cv2.cvtColor(imgCanny,cv2.COLOR_GRAY2RGB)
+        imgCannyTest[cornerMap>0]=[0,0,255]
+        cycleImg(imgCannyTest)
+        mask=np.zeros((height+1, width+1), dtype=int)
+        for corner in centroids:
+            mask[int(corner[1]),int(corner[0])]=255
+        mask = cv2.dilate(mask.astype("uint8"),np.ones((4,4)),iterations = 1)
+        imgCannyTest[mask==255]=[255,0,0]
+        cycleImg(imgCannyTest)
     img = cv2.dilate(imgCanny,np.ones((CANNYDILATION,CANNYDILATION),np.uint8),iterations = 1)
 
     dist=0.1*min(height, width) #Distance for merging similar lines
@@ -227,8 +232,6 @@ def getFilteredEdges(img, samplingRate, threshold, cornerType):
                 
     lines = set(lines)
 
-    print(len(lines))
-
     redundantLines=[]
     for line in lines:
         for line1 in lines:
@@ -275,19 +278,20 @@ def getFilteredEdges(img, samplingRate, threshold, cornerType):
 
 
     
-
-    for line in lines:
-        cv2.line(imgTest,line[0],line[1],(0,0,255),2)
-        for line1 in lines:
-            if ((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0])) != 0 and ((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0])) != 0:
-                intersectX=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][0]-line[1][0])-(line1[0][0]-line1[1][0])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
-                intersectY=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
-                intersection = (int(intersectX), int(intersectY))
-                cv2.line(imgTest,(intersection[0],intersection[1]),(intersection[0],intersection[1]+5),(0,255,0),3)
-    cycleImg(imgTest)
+    if DEBUG:
+        for line in lines:
+            cv2.line(imgTest,line[0],line[1],(0,0,255),2)
+            for line1 in lines:
+                if ((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0])) != 0 and ((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0])) != 0:
+                    intersectX=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][0]-line[1][0])-(line1[0][0]-line1[1][0])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
+                    intersectY=((line1[0][0]*line1[1][1]-line1[0][1]*line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]*line[1][1]-line[0][1]*line[1][0]))/((line1[0][0]-line1[1][0])*(line[0][1]-line[1][1])-(line1[0][1]-line1[1][1])*(line[0][0]-line[1][0]))
+                    intersection = (int(intersectX), int(intersectY))
+                    cv2.line(imgTest,(intersection[0],intersection[1]),(intersection[0],intersection[1]+5),(0,255,0),3)
+        cycleImg(imgTest)
 
     return lines
 
+#Returns the avaerage convergence point of the collection of lines passed
 def getVanishingPoint(lines):
     lines=[[line[0], line[1], line[2], set()] for line in lines]
     for line in lines:
@@ -319,14 +323,36 @@ def getVanishingPoint(lines):
     return vanishingPoint
 
 #TODO
-#NEEDS BUG TESTING
+#NEEDS BUG TESTING - for boards with vanishing points
 #Takes an array of edges and fills in the missing lines, then removes the least conforming lines to produce a 10x10 grid
 #Args - (line array in the form [(x, y), (x, y), rho])
 #Return - [sorted vertical line array of length 10 in the form [(min x, min y), (max x, max y)], sorted horizontal line array of length 10 in the form [(min x, min y), (max x, max y)]
 def getBoardLines(lines):
+##    lines=[]
+##    
+##    height, width = img.shape[:2]
+##
+##    height, width = height - 1, width - 1
+##
+##    hRange = list(range(9))
+##    wRange = list(range(9))
+##
+##    rand.shuffle(hRange)
+##    rand.shuffle(wRange)
+##
+##    direction = [rand.randrange(2) for i in hRange]
+##    for i in hRange:
+##        if rand.randrange(6)!=0:
+##            lines.append(((int(i*width/8), 0 if direction[i] == 0 else height), (int(i*width/8), 0 if direction[i] == 1 else height), np.pi*0.5))
+##
+##    direction = [rand.randrange(2) for i in wRange]
+##    for i in wRange:
+##        if rand.randrange(6)!=0:
+##            lines.append(((0 if direction[i] == 0 else width, int(i*height/8)), (0 if direction[i] == 1 else width, int(i*height/8)), 0))
+    
     lines.sort(key=lambda x: x[2])
 
-    #TODO - Factor out redundant code
+    #TODO - Factor out redundant code (although probably not a good idea if it would make this method any harder to read than it already is)
     
     lines1=None
     lines2=None
@@ -350,12 +376,16 @@ def getBoardLines(lines):
     vLines=None
     hLines=None
 
+    if not lines1 or not lines2:
+        return False, None, None
+    
+
     if abs(90-np.mean([line[2] for line in lines1])) >= abs(90-np.mean([line[2] for line in lines2])):
-        vLines=lines1
-        hLines=lines2
-    else:
         vLines=lines2
         hLines=lines1
+    else:
+        vLines=lines1
+        hLines=lines2
 
     vLines = [(min(line[:2], key=lambda x: x[1]), max(line[:2], key=lambda x: x[1]), line[2]) for line in vLines]
     hLines = [(min(line[:2], key=lambda x: x[0]), max(line[:2], key=lambda x: x[0]), line[2]) for line in hLines]
@@ -365,52 +395,73 @@ def getBoardLines(lines):
     vLines.sort(key=lambda x: x[0][1])
     hLines.sort(key=lambda x: x[0][0])
 
+    lines=None
+    del lines
+
+    if DEBUG:
+        imgTest=img.copy()
+        for line in vLines:
+            cv2.line(imgTest,line[0],line[1],(0,0,255),2)
+        for line in hLines:
+            cv2.line(imgTest,line[0],line[1],(255,0,0),2)
+
+        cycleImg(imgTest)
+
+    
     vVanishingPoint=getVanishingPoint(vLines)
     hVanishingPoint=getVanishingPoint(hLines)
 
     distances=[]
-    if vVanishingPoint is not None:
+    #Distances to vanishing point calculated as ratios to conserve perspective
+    if hVanishingPoint is not None:
         for i in range(len(vLines)-1):
-            distances.append(np.mean(((vVanishingPoint[1] - vLines[i+1][0][1])/(vVanishingPoint[1] - vLines[i][0][1]),(vVanishingPoint[1] - vLines[i+1][1][1])/(vVanishingPoint[1] - vLines[i][1][1]))))
+            distances.append(np.mean(((hVanishingPoint[0] - vLines[i+1][0][0])/(hVanishingPoint[0] - vLines[i][0][0]),(vVanishingPoint[0] - vLines[i+1][1][0])/(hVanishingPoint[0] - vLines[i][1][0]))))
     else:
         for i in range(len(vLines)-1):
-            distances.append(np.mean((vLines[i+1][0][1]/vLines[i][0][1],vLines[i+1][1][1]/vLines[i][1][1]))) 
+            distances.append(np.mean((vLines[i+1][0][0]-vLines[i][0][0],vLines[i+1][1][0]-vLines[i][1][0])))
                
     vDistances = distances.copy()
     distances.sort()
-    maxDist=distances[-1]-distances[0]
-    distances1 = [maxDist//distance for distance in distances]
+    if hVanishingPoint is not None:
+        maxDist=distances[-1]-distances[0]
+    else:
+        maxDist=np.mean((vLines[-1][0][0]-vLines[0][0][0],vLines[-1][1][0]-vLines[0][1][0]))
+    distances1 = [maxDist//(distance+1) for distance in sorted(distances, reverse=True)]
 
     vSquareSize=None
 
     for i in range(len(distances)):
         if distances1.count(distances1[i])>=3:
-           vSquareSize=distances[i]
+           vSquareSize=maxDist/distances1[i]
            break
         
 
     distances=[]
-    if hVanishingPoint is not None:
+    #Distances to vanishing point calculated as ratios due conserve perspective
+    if vVanishingPoint is not None:
         for i in range(len(hLines)-1):
-            distances.append(np.mean(((hVanishingPoint[0] - hLines[i+1][0][0])/(hVanishingPoint[0] - hLines[i][0][0]),(hVanishingPoint[0] - hLines[i+1][1][0])/(hVanishingPoint[0] - hLines[i][1][0]))))
+            distances.append(np.mean(((vVanishingPoint[1] - hLines[i+1][0][1])/(vVanishingPoint[1] - hLines[i][0][1]),(vVanishingPoint[1] - hLines[i+1][1][1])/(vVanishingPoint[1] - hLines[i][1][1]))))
     else:
         for i in range(len(hLines)-1):
-            distances.append(np.mean((hLines[i+1][0][0]/hLines[i][0][0],hLines[i+1][1][0]/hLines[i][1][0])))
+            distances.append(np.mean((hLines[i+1][0][1]-hLines[i][0][1],hLines[i+1][1][1]-hLines[i][1][1])))
 
     hDistances = distances.copy()
     distances.sort()
-    maxDist=distances[-1]-distances[0]
-    distances1 = [maxDist//distance for distance in distances]
+    if hVanishingPoint is not None:
+        maxDist=distances[-1]-distances[0]
+    else:
+        maxDist=np.mean((hLines[-1][0][1]-hLines[0][0][1],hLines[-1][1][1]-hLines[0][1][1]))
+    distances1 = [maxDist//distance for distance in sorted(distances, reverse=True)]
 
     hSquareSize=None
 
     for i in range(len(distances)):
         if distances1.count(distances1[i])>=3:
-           hSquareSize=distances[i]
+           hSquareSize=maxDist/distances1[i]
            break
 
     if vSquareSize is None or hSquareSize is None:
-        return None
+        return False, None, None
 
     #Fill in missing lines
 
@@ -421,10 +472,10 @@ def getBoardLines(lines):
             continue
 
         for i1 in range(missingLines):
-            minXPos=vLines[i][0][0] + (vLines[i+1][0][0]-vLines[i+1][0][0])//missingLines
-            maxXPos=vLines[i][1][0] + (vLines[i+1][1][0]-vLines[i+1][1][0])//missingLines
-            minYPos=vLines[i][0][1] + (vLines[i+1][0][1]-vLines[i+1][0][1])//missingLines
-            maxYPos=vLines[i][1][1] + (vLines[i+1][1][1]-vLines[i+1][1][1])//missingLines
+            minXPos=vLines[i][0][0] + i1*(vLines[i+1][0][0]-vLines[i][0][0])//missingLines
+            maxXPos=vLines[i][1][0] + i1*(vLines[i+1][1][0]-vLines[i][1][0])//missingLines
+            minYPos=vLines[i][0][1] + i1*(vLines[i+1][0][1]-vLines[i][0][1])//missingLines
+            maxYPos=vLines[i][1][1] + i1*(vLines[i+1][1][1]-vLines[i][1][1])//missingLines
             newLines.append(((minXPos, minYPos), (maxXPos, maxYPos)))
 
             #TODO
@@ -433,7 +484,7 @@ def getBoardLines(lines):
 
     i=0
     while i < len(vLines)-1:
-        if vDistances[i] < vSquareSize:
+        if vDistances[i] < vSquareSize and False:   #BUG with board cleanup
             del vLines[i]
             del vDistances[i]
             continue
@@ -444,14 +495,14 @@ def getBoardLines(lines):
     newLines=[]
     for i in range(len(hLines)-1):
         missingLines = int(round(hDistances[i]/hSquareSize))
-        if missingLines == 1:
+        if missingLines <= 1:
             continue
 
         for i1 in range(missingLines):
-            minXPos=vLines[i][0][0] + (vLines[i+1][0][0]-vLines[i+1][0][0])//missingLines
-            maxXPos=vLines[i][1][0] + (vLines[i+1][1][0]-vLines[i+1][1][0])//missingLines
-            minYPos=vLines[i][0][1] + (vLines[i+1][0][1]-vLines[i+1][0][1])//missingLines
-            maxYPos=vLines[i][1][1] + (vLines[i+1][1][1]-vLines[i+1][1][1])//missingLines
+            minXPos=hLines[i][0][0] + i1*(hLines[i+1][0][0]-hLines[i][0][0])//missingLines
+            maxXPos=hLines[i][1][0] + i1*(hLines[i+1][1][0]-hLines[i][1][0])//missingLines
+            minYPos=hLines[i][0][1] + i1*(hLines[i+1][0][1]-hLines[i][0][1])//missingLines
+            maxYPos=hLines[i][1][1] + i1*(hLines[i+1][1][1]-hLines[i][1][1])//missingLines
             newLines.append(((minXPos, minYPos), (maxXPos, maxYPos)))
 
             #TODO
@@ -460,7 +511,7 @@ def getBoardLines(lines):
 
     i=0
     while i < len(hLines)-1:
-        if hDistances[i] < hSquareSize:
+        if hDistances[i] < hSquareSize and False:   #BUG with board cleanup
             del hLines[i]
             del hDistances[i]
             continue
@@ -473,7 +524,7 @@ def getBoardLines(lines):
     vLines.sort(key=lambda x: x[0][1])
     hLines.sort(key=lambda x: x[0][0])
     
-    return [line[:2] for line in vLines], [line[:2] for line in hLines]
+    return True, [line[:2] for line in vLines], [line[:2] for line in hLines]
         
 #NEEDS BUG TESTING
 def getPieces(img):
@@ -502,18 +553,26 @@ def getBoardState(lines1, lines2, pieces):
     
         
 
-for filename in os.listdir(PATH):
+for filename in listdir(PATH):
     img = cv2.imread(PATH + filename)
     img = img[:,img.shape[1]//2:]
     img = cv2.resize(img, (0,0), fx=0.5, fy=0.5)
-    cycleImg(img)
+    if DEBUG:
+        cycleImg(img)
     h,  w = img.shape[:2]
     newcameramtx, roi=cv2.getOptimalNewCameraMatrix(CAMERA_MATRIX,CAMERA_DISTORTION,(w,h),0,(w,h))
     img = cv2.undistort(img, CAMERA_MATRIX, CAMERA_DISTORTION, None, newcameramtx)
-    cycleImg(img)
+    if DEBUG:
+        cycleImg(img)
     lines=getFilteredEdges(img, LINESAMPLERATE, LINETHRESHOLD, CORNERDETECTIONTYPE)
-##    vLines, hLines=getBoardLines(lines)
-##    for line in hLines:
-##        print(line)
-##        cv2.line(img,line[0],line[1],(0,0,255),2)
-##    cycleImg(img)
+    ret, vLines, hLines=getBoardLines(lines)
+    if DEBUG and ret:
+        imgTest=img.copy()
+        for line in hLines:
+            cv2.line(imgTest,line[0],line[1],(0,0,255),2)
+        cycleImg(imgTest)
+
+        imgTest=img.copy()
+        for line in vLines:
+            cv2.line(imgTest,line[0],line[1],(0,0,255),2)
+        cycleImg(imgTest)
